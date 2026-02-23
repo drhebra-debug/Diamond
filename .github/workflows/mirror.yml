@@ -1,0 +1,34 @@
+name: Mirror Repository
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  mirror:
+    name: Mirror to remote
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "${{ secrets.GIT_MIRROR_NAME || 'github-actions' }}"
+          git config user.email "${{ secrets.GIT_MIRROR_EMAIL || 'actions@github.com' }}"
+
+      - name: Add mirror remote
+        run: |
+          if [ -z "${{ secrets.MIRROR_REMOTE }}" ]; then
+            echo "MIRROR_REMOTE secret is not set; aborting."; exit 1
+          fi
+          git remote add mirror "${{ secrets.MIRROR_REMOTE }}" || true
+
+      - name: Push mirror
+        env:
+          MIRROR_REMOTE: ${{ secrets.MIRROR_REMOTE }}
+        run: |
+          echo "Pushing mirror to $MIRROR_REMOTE"
+          git push --mirror "$MIRROR_REMOTE"
