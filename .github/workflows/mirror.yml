@@ -6,6 +6,7 @@ on:
 
 jobs:
   mirror:
+    if: ${{ secrets.MIRROR_REMOTE != '' }}
     name: Mirror to remote
     runs-on: ubuntu-latest
     steps:

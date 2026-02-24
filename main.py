@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 import json
 import uuid
@@ -24,7 +24,18 @@ import logging
 import threading
 import subprocess
 import os
-    return ""
+from pathlib import Path
+from typing import List, Dict, Any, Union, Optional
+from collections import OrderedDict
+import hashlib
+import csv
+from datetime import datetime
+from contextlib import asynccontextmanager
+import asyncio
+import psycopg2
+import redis
+from pydantic import BaseModel
+from llama_cpp import Llama
 auto_discover_tools()
 # ==========================================================
 # CONFIG
@@ -547,51 +558,6 @@ async def anthropic_messages(req: AnthropicRequest):
         log_conversation(session_id, last_query, full_text, model_name)
 
     return StreamingResponse(stream(), media_type="text/event-stream")
-"""
-@app.post("/v1/messages")
-async def anthropic_messages(req: AnthropicRequest):
-    session_id = req.session_id or str(uuid.uuid4())
-    agent_key = req.agent
-    if agent_key and agent_key in AGENTS:
-        agent = AGENTS[agent_key]
-        model_name = agent["model"]
-        diamond_system = agent["system_prompt"]
-        logging.info(f"🎯 Using agent: {agent_key}")
-    else:
-        model_name = req.model or MAIN_MODEL_NAME
-        diamond_system = COMMANDER_SYSTEM_PROMPT
-    #cleaned = clean_all_messages(req.messages)
-    cleaned = []
-    for m in req.messages:
-        text = extract_text_content(m.get("content"))
-        if not text:
-            continue
-        cleaned.append({
-            "role": m.get("role"),
-            "content": text
-        })
-    last_query = next((m.get("content", "") for m in reversed(cleaned) if m.get("role") == "user"), "")
-    rag = retrieve_rag_context(last_query)
-    if rag.strip():
-        diamond_system += (
-        "\n\nUse the following project context only if relevant:\n\n"
-        f"{rag}\n"
-        )
-    messages = [{"role": "system", "content": diamond_system}]
-    messages.extend(cleaned)
-    llm = load_model(model_name)
-    response_text = run_agent_loop(llm, messages, req.temperature, req.max_tokens)
-    log_conversation(session_id, last_query, response_text, model_name)
-    return JSONResponse({
-        "id": f"msg_{uuid.uuid4().hex}",
-        "type": "message",
-        "role": "assistant",
-        "model": model_name,
-        "content": [{"type": "text", "text": response_text}],
-        "stop_reason": "end_turn",
-        "session_id": session_id
-    })
-"""
 @app.get("/health")
 @app.get("/v1/health")
 async def health():
