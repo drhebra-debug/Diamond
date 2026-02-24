@@ -77,6 +77,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 from agents import router as agents_router
+from tools.sanitizer import sanitize_system_context
+from skills.selector import select_skill_from_flags
 
 
 # ==========================================================
@@ -462,8 +464,16 @@ async def anthropic_messages(req: AnthropicRequest):
 
     # -------- CLEAN MESSAGE EXTRACTION --------
     cleaned = []
+    # collect system hints
+    system_hints = []
     for m in req.messages:
-        text = extract_text_content(m.get("content"))
+        raw = m.get("content")
+        if m.get("role") == "system":
+            s, flags = sanitize_system_context(raw)
+            system_hints.append((s, flags))
+            text = extract_text_content(s)
+        else:
+            text = extract_text_content(raw)
         if not text:
             continue
         cleaned.append({
@@ -484,10 +494,28 @@ async def anthropic_messages(req: AnthropicRequest):
             f"{rag}\n"
         )
 
+    # Server-side skill selection: inspect system_hints and cleaned user text
+    all_flags = []
+    for s, flags in system_hints:
+        all_flags.extend(flags)
+    user_text = "\n".join(m.get("content", "") for m in cleaned if m.get("role") == "user")
+    selected_skill = select_skill_from_flags(all_flags, user_text)
+    if selected_skill == "claude-developer-platform":
+        # use concise skill instruction rather than full policy blocks
+        diamond_system = "You are Claude Developer Platform assistant. Answer concisely and act on codebase context when applicable." \
+                        + "\n\n" + ("Use the following project context only if relevant:\n\n" + rag + "\n" if rag.strip() else "")
+
     messages = [{"role": "system", "content": diamond_system}]
     messages.extend(cleaned)
 
-    llm = load_model(model_name)
+    # Validate requested model early
+    try:
+        llm = load_model(model_name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Model load failed for {model_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     def stream():
         """Synchronous generator that yields SSE events for the client.
