@@ -155,14 +155,23 @@ def load_model(name: str) -> Llama:
             oldest = next(iter(model_cache))
             unload_model(oldest)
         logging.info(f"🚀 Loading model: {cache_key} -> {model_path}")
-        llm = Llama(
-            model_path=model_path,
-            n_gpu_layers=-1,
-            n_ctx=N_CTX,
-            n_batch=1024,
-            n_threads=N_THREADS,
-            verbose=False,
-        )
+        try:
+            llm = Llama(
+                model_path=model_path,
+                n_gpu_layers=-1,
+                n_ctx=N_CTX,
+                n_batch=1024,
+                n_threads=N_THREADS,
+                verbose=False,
+            )
+        except Exception as e:
+            logging.error(f"Failed to initialize Llama model at {model_path}: {e}")
+            # Ensure we don't leave a partially-constructed object around
+            try:
+                del llm
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
         model_cache[cache_key] = llm
         model_last_used[cache_key] = time.time()
         model_cache.move_to_end(cache_key)
@@ -348,15 +357,19 @@ You have full access to the codebase. Be direct and precise."""
 async def lifespan(app: FastAPI):
     global embedder, pg_conn
     logging.info("Loading embedder (GPU)...")
-    embedder = Llama(
-        model_path=EMBEDDING_MODEL_PATH,
-        embedding=True,
-        n_gpu_layers=-1,
-        n_ctx=512,
-        n_batch=256,
-        verbose=False,
-        logits_all=False
-    )
+    try:
+        embedder = Llama(
+            model_path=EMBEDDING_MODEL_PATH,
+            embedding=True,
+            n_gpu_layers=-1,
+            n_ctx=512,
+            n_batch=256,
+            verbose=False,
+            logits_all=False
+        )
+    except Exception as e:
+        logging.error(f"Failed to initialize embedder: {e}")
+        embedder = None
 
     logging.info("✅ Diamond v5.2 with Agents ready!")
     yield
