@@ -72,9 +72,10 @@ REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from diamond.core.logging_config import setup_logging
 
-
+# configure structured logging (JSON lines to file + console)
+setup_logging(LOG_FOLDER, level=logging.INFO)
 
 from agents import router as agents_router
 from tools.sanitizer import sanitize_system_context
