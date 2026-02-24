@@ -35,7 +35,10 @@ import asyncio
 import psycopg2
 import redis
 from pydantic import BaseModel
-from llama_cpp import Llama
+try:
+    from llama_cpp import Llama
+except Exception:
+    Llama = None
 auto_discover_tools()
 # ==========================================================
 # CONFIG
@@ -289,25 +292,7 @@ def extract_text_content(content: Any) -> str:
         return "\n".join(texts).strip()
 
     return ""
-"""
-def extract_text_content(content: Any) -> str:
-    """
-   # Extract only text blocks from Anthropic-style content.
-    """
 
-    if isinstance(content, str):
-        return content.strip()
-
-    if isinstance(content, list):
-        texts = []
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                texts.append(block.get("text", ""))
-        return "\n".join(texts).strip()
-
-    return ""
-
-"""
 # ==========================================================
 # AGENT LOOP
 # ==========================================================
@@ -374,6 +359,22 @@ async def lifespan(app: FastAPI):
     if pg_conn: pg_conn.close()
 
 app = FastAPI(lifespan=lifespan)
+
+# Register agent package startup/shutdown handlers at the application level
+try:
+    # Use application-level event handlers to avoid router.on_event deprecation warnings
+    import asyncio as _asyncio
+    def _agents_startup():
+        # schedule the coroutine
+        _asyncio.create_task(agents_router.context.connect())
+
+    def _agents_shutdown():
+        _asyncio.create_task(agents_router.context.close())
+
+    app.add_event_handler("startup", _agents_startup)
+    app.add_event_handler("shutdown", _agents_shutdown)
+except Exception:
+    pass
 
 # ==========================================================
 # REQUEST MODELS

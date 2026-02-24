@@ -36,7 +36,11 @@ def test_v1_messages_stream(monkeypatch):
     with client.stream("POST", "/v1/messages", json=payload) as resp:
         assert resp.status_code == 200
         body = ""
-        for line in resp.iter_lines(decode_unicode=True):
+        for raw in resp.iter_lines():
+            # TestClient may return bytes; decode if necessary for compatibility
+            line = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw
+            if not line:
+                continue
             body += line + "\n"
 
     # Expect SSE event names in stream
