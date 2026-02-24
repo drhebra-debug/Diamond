@@ -488,9 +488,11 @@ async def anthropic_messages(req: AnthropicRequest):
         ""
     )
 
-    # Validate request payload early (use original request dict)
+    # Validate request payload early (use original request dump)
     try:
-        validate_request_payload(req.model and req.dict() or {}, MODEL_PATHS)
+        payload = req.model_dump() if hasattr(req, "model_dump") else (req.dict() if hasattr(req, "dict") else {})
+        # If model was omitted, ensure we still pass an object
+        validate_request_payload(payload or {}, MODEL_PATHS)
     except HTTPException:
         raise
     except Exception as e:

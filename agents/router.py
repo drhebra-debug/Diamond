@@ -191,6 +191,7 @@ async def run_agent(request: AgentRequest):
     try:
         agent = registry.get(request.agent)
         response = await agent.run(request.prompt, request.metadata)
-        return response.dict()
+        # Support both pydantic v2 (model_dump) and v1 (dict)
+        return response.model_dump() if hasattr(response, "model_dump") else (response.dict() if hasattr(response, "dict") else {})
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
