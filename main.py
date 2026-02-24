@@ -79,6 +79,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 from agents import router as agents_router
 from tools.sanitizer import sanitize_system_context
 from skills.selector import select_skill_from_flags
+from tools.validation import validate_request_payload
+import json as _json
 
 
 # ==========================================================
@@ -486,6 +488,14 @@ async def anthropic_messages(req: AnthropicRequest):
         ""
     )
 
+    # Validate request payload early (use original request dict)
+    try:
+        validate_request_payload(req.model and req.dict() or {}, MODEL_PATHS)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.warning(f"Request validation warning: {e}")
+
     rag = retrieve_rag_context(last_query)
 
     if rag.strip():
@@ -509,6 +519,19 @@ async def anthropic_messages(req: AnthropicRequest):
     messages.extend(cleaned)
 
     # Validate requested model early
+    # Structured request logging
+    request_id = f"req_{uuid.uuid4().hex}"
+    prompt_snippet = (last_query or "")[:1024]
+    logging.info(_json.dumps({
+        "event": "request_received",
+        "request_id": request_id,
+        "session_id": session_id,
+        "model": model_name,
+        "agent_key": agent_key,
+        "prompt_snippet": prompt_snippet
+    }))
+
+    # Validate and load model
     try:
         llm = load_model(model_name)
     except HTTPException:
