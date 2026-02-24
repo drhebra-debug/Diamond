@@ -131,16 +131,20 @@ def load_model(name: str) -> Llama:
     model_path = None
     cache_key = name
 
-    # If `name` is a filesystem path to a model file, use it directly.
-    maybe_path = Path(name)
-    if maybe_path.exists():
-        model_path = str(maybe_path)
-        cache_key = model_path
-    elif name in MODEL_PATHS:
+    # Prefer named models from MODEL_PATHS first (safe for names like "diamond").
+    if name in MODEL_PATHS:
         model_path = MODEL_PATHS[name]
         cache_key = name
     else:
-        raise HTTPException(status_code=404, detail=f"Model {name} not found")
+        # Only treat `name` as a filesystem path if it points to an actual file
+        # and looks like a model file (e.g. .gguf, .bin). This prevents passing
+        # literal model names (like "diamond") directly to llama_cpp.
+        maybe_path = Path(name)
+        if maybe_path.is_file() and maybe_path.suffix in (".gguf", ".bin", ".pt", ".pth"):
+            model_path = str(maybe_path)
+            cache_key = model_path
+        else:
+            raise HTTPException(status_code=404, detail=f"Model {name} not found")
 
     with lock:
         if cache_key in model_cache:
