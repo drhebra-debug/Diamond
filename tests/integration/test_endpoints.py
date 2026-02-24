@@ -27,7 +27,7 @@ def test_v1_messages_stream(monkeypatch):
     client = TestClient(main.app)
 
     payload = {
-        "model": "mock",
+        "model": "diamond",
         "messages": [{"role": "user", "content": "Say hi"}],
         "max_tokens": 32,
         "temperature": 0.2
